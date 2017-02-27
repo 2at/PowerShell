@@ -296,7 +296,8 @@ Function LogSteps {
 		
 		[int]
 		$StepNumber,
-		[PSCustomObject]$Monitor,
+		
+		[string]$Monitor,
 		
 		[switch]
 		$PassThru
@@ -420,10 +421,8 @@ Function Invoke-Monitoring {
 			default {
 				Write-Progress -Activity 'Retreiving webpage' -CurrentOperation $CurrentStep.Url -PercentComplete (100*$i/$Steps.Count)
 
-				$Monitor = "";
-				if ($CurrentStep['Monitor']) { $Monitor = $CurrentStep.Monitor }
 				RunStep -Step $CurrentStep -Previous $Previous -Session $Session
-				LogSteps -Session $Session -StepNumber ($i+1) -Monitor $Monitor -PassThru
+				LogSteps -Session $Session -StepNumber ($i+1) -Monitor $CurrentStep['Monitor'] -PassThru
 				$Previous = $Session.History | Select -Last 1
 				$Session.History=@()
 			}
