@@ -47,7 +47,7 @@ Function Step {
 		[object]$FormData
 	)
 	
-	$res = Get-WebResponse -Url $Url -Method $Method -FormData $FormData -CookieContainer $Session.CookieContainer -Proxy $Session.Proxy -UserAgent 'Mozilla/5.0 (2AT Monitoring; +http://2at.nl)'
+	$res = Get-WebResponse -Url $Url -Method $Method -FormData $FormData -CookieContainer $Session.CookieContainer -Proxy $Session.Proxy -UserAgent 'Mozilla/5.0 (2AT Monitoring; +http://2at.nl)' -Credentials $Session.Credentials
 	
 	if ($Session.History | ?{ $Url -eq $_.Url -and $Method -eq $_.Method -and $res.ResponseBody -eq $_.ResponseBody }) {
 		$res.WebRequestStatus='LoopDetected'
@@ -136,6 +136,38 @@ Function ProcessLink {
 	Step -url $l -Session $Session
 }
 
+Function UpdateSession {
+	Param(
+		[Parameter(Mandatory=$true)]	
+		[HashTable]$Step,
+		
+		[Parameter(Mandatory=$true)]	
+		[PSCustomObject]$Session,
+		
+		[PSCustomObject]$TMGInfo,
+		
+		[Switch]$IsNewSession
+	)
+	Write-Debug "Updating $(if($IsNewSession) {'NEW'})session"
+	
+	if (!$IsNewSession -and ($Step['SqlConnection'] -or $Step['Name'])) { throw 'Specifying a SqlConnection or Name is only supported for new sessions' }
+
+	if ($Step['Proxy']) { $Session.Proxy = New-Object System.Net.WebProxy $Step.Proxy	}
+	if ($Step['LoginSteps']) { $Session.LoginSteps = $Step.LoginSteps }
+	if ($Step['Servers']) { SetSessionCookies -Session $Session -TMGInfo $TMGInfo -Servers $Step.Servers }
+	if ($Step['Credentials']) {
+		if ($Step.Credentials -is [PSCredential]) {
+			$Session.Credentials = $Step.Credentials.GetNetworkCredential()
+		} elseif ($Step.Credentials -is [System.Net.ICredentials]) {
+			$Session.Credentials = $Step.Credentials
+		} else {
+			throw "Session credentials specified are of an unsupported type: $($Step.Credentials.GetType().FullName), please use either a PSCredential or a NetworkCredential"
+		}
+	}
+	
+	if ($IsNewSession) { $Session }
+}
+
 Function NewSession {
 	Param(
 		[Parameter(Mandatory=$true)]	
@@ -150,15 +182,12 @@ Function NewSession {
 		CookieContainer = New-Object System.Net.CookieContainer
 		Proxy=$null
 		SqlConnection=$Step['SqlConnection']
-		LoginSteps=if ($Step['LoginSteps']) { $Step.LoginSteps } else { @{} }
+		LoginSteps=@{}
+		Credentials=$null
 		History=@()
 		RequestNumber=1
-	}
-	
-	if ($Step['Proxy']) {
-		$Session.Proxy = New-Object System.Net.WebProxy $Step.Proxy
-	}
-	
+	}	
+
 	if ($Session.SqlConnection) {
 		Write-Verbose "NEWSESSION: Connecting to SQL '$($Step.SqlConnection)'"
 		
@@ -168,12 +197,9 @@ Function NewSession {
 		$Session.Id = $MonitorSession.SessionId
 	}
 
-	if ($Step['Servers']) {
-		SetSessionCookies -Session $Session -TMGInfo $TMGInfo -Servers $Step.Servers
-	} else { Write-Verbose 'NEWSESSION: New session created without cookies' }
-
+	if (!$Step['Servers']) { Write-Verbose 'NEWSESSION: New session created without cookies' }
 	
-	[PSCustomObject]$Session
+	UpdateSession -Step $Step -Session ([PSCustomObject]$Session) -TMGInfo $TMGInfo -IsNewSession
 }
 
 Function SetSessionCookies {
@@ -386,10 +412,7 @@ Function Invoke-Monitoring {
 				Write-Progress -Activity 'Updating session' -PercentComplete (100*$i/$Steps.Count)
 				Write-Debug 'UPDATESESSION'
 
-				if ($CurrentStep['SqlConnection']) { $Session.SqlConnection = $CurrentStep.SqlConnection }
-				if ($CurrentStep['Proxy']) { $Session.Proxy = $CurrentStep.Proxy }
-				if ($CurrentStep['LoginSteps']) { $Session.LoginSteps = $CurrentStep.LoginSteps }
-				if ($CurrentStep['Servers']) { SetSessionCookies -Session $Session -TMGInfo $TMGInfo -Servers $CurrentStep.Servers }
+				UpdateSession -Step $CurrentStep -TMGInfo $TMGInfo -Session $Session
 			}
 			default {
 				Write-Progress -Activity 'Retreiving webpage' -CurrentOperation $CurrentStep.Url -PercentComplete (100*$i/$Steps.Count)

@@ -43,6 +43,8 @@ Function Get-WebResponse {
 		
 		[System.Net.WebProxy]$Proxy,
 		
+		[System.Net.ICredentials]$Credentials,
+		
 		[string]$UserAgent
 	)
 	Get-CallerPreference -Cmdlet $PSCmdlet -SessionState $ExecutionContext.SessionState
@@ -70,6 +72,7 @@ Function Get-WebResponse {
 	$req.CookieContainer = $CookieContainer
 	$req.Method = $Method
 	$req.Proxy = $Proxy
+	$req.Credentials = $Credentials
 	
 	$c = $null
 	if ($FormData) {
