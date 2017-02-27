@@ -186,6 +186,7 @@ Function NewSession {
 		Credentials=$null
 		History=@()
 		RequestNumber=1
+		Monitor=if ($Step['Monitor']) { $Step.Monitor } else { @{} }
 	}	
 
 	if ($Session.SqlConnection) {
@@ -295,6 +296,7 @@ Function LogSteps {
 		
 		[int]
 		$StepNumber,
+		[PSCustomObject]$Monitor,
 		
 		[switch]
 		$PassThru
@@ -319,6 +321,7 @@ Function LogSteps {
 			RequestStatusDescription=$WebResponse.WebRequestStatusDescription
 			Url=$WebResponse.Url
 			SessionId=$Session.Id
+			Monitor=$Monitor
 			StepNumber=$StepNumber
 			RequestNumber=$Session.RequestNumber++
 			IsStepResult=($i -eq $Session.History.Count)
@@ -417,8 +420,10 @@ Function Invoke-Monitoring {
 			default {
 				Write-Progress -Activity 'Retreiving webpage' -CurrentOperation $CurrentStep.Url -PercentComplete (100*$i/$Steps.Count)
 
+				$Monitor = "";
+				if ($CurrentStep['Monitor']) { $Monitor = $CurrentStep.Monitor }
 				RunStep -Step $CurrentStep -Previous $Previous -Session $Session
-				LogSteps -Session $Session -StepNumber ($i+1) -PassThru
+				LogSteps -Session $Session -StepNumber ($i+1) -Monitor $Monitor -PassThru
 				$Previous = $Session.History | Select -Last 1
 				$Session.History=@()
 			}
