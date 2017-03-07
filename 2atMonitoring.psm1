@@ -47,7 +47,7 @@ Function Step {
 		[object]$FormData
 	)
 	
-	$res = Get-WebResponse -Url $Url -Method $Method -FormData $FormData -CookieContainer $Session.CookieContainer -Proxy $Session.Proxy -UserAgent 'Mozilla/5.0 (2AT Monitoring; +http://2at.nl)' -Credentials $Session.Credentials
+	$res = Get-WebResponse -Url $Url -Method $Method -FormData $FormData -CookieContainer $Session.CookieContainer -Proxy $Session.Proxy -UserAgent 'Mozilla/5.0 (compatible; MSIE 10.0; Windows NT 6.2; WOW64; Trident/6.0; 2AT Monitoring; +http://2at.nl)' -Credentials $Session.Credentials
 	
 	if ($Session.History | ?{ $Url -eq $_.Url -and $Method -eq $_.Method -and $res.ResponseBody -eq $_.ResponseBody }) {
 		$res.WebRequestStatus='LoopDetected'
