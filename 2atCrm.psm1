@@ -1,150 +1,169 @@
-﻿Set-StrictMode -Version 2.0
+#Requires -Version 4.0
+Set-StrictMode -Version 2.0
 
-Invoke-WebRequest -Uri http://ps.2at.nl/2017/04/2atGeneral.psm1 -OutFile "$Env:TEMP\2017_04_2atGeneral.psm1"
-Add-Content "$Env:TEMP\2017_04_2atGeneral.psm1" -Stream Zone.Identifier "[ZoneTransfer]`r`nZoneId=3"
-Import-Module "$Env:TEMP\2017_04_2atGeneral.psm1" -Force -Verbose:$false
-Remove-Item "$Env:TEMP\2017_04_2atGeneral.psm1"
+Function Import-WebModule {
+	Param(
+		$Uri
+	)
 
-function execSql {
-    [CmdletBinding()]
-    param (
-        [string]
-        $ConnectionString,
-        
-        [Parameter(ValueFromPipeline)]
-        [System.Data.SqlClient.SqlConnection]
-        $SqlConnection,
-        
-        [Parameter(Position=0)]
-        [ValidateNotNullorEmpty()]
-        [string]
-        $CommandText,
-        
-        [bool]
-        $CommandIsQuery,
-        
-        [Parameter(Position=1)]
-        [hashtable]
-        $Parameters=@{},
+	$tempfile = "$Env:TEMP\$(([Uri]$Uri).AbsolutePath.Replace('/','_'))"
 
-        [scriptblock]
-        $Script,
-
-		[int]
-		$Timeout
-    )
-
-    Write-Verbose "Executing SQL: $CommandText"
-
-    if ($SqlConnection -and ![string]::IsNullOrEmpty($ConnectionString)) { Write-Warning "Both SqlConnection and ConnectionString set. Using SqlConnection and ignoring ConnectionString value." }
-
-    if (!$SqlConnection)
-    {
-        if ([string]::IsNullOrEmpty($ConnectionString)) { throw "Either supply a SqlConnection object or a ConnectionString" }
-
-        $SqlConnection = New-Object System.Data.SqlClient.SqlConnection($ConnectionString)
-        $disposeConnection = $true
-    }
-
-    $SqlCmd = $SqlConnection.CreateCommand()
-    $SqlCmd.CommandText = $CommandText
-    if ($Timeout -ne -1) { $SqlCmd.CommandTimeout = $Timeout }
-    if (!$CommandIsQuery) { $SqlCmd.CommandType = [System.Data.CommandType]'StoredProcedure' }
-
-    foreach($p in $parameters.Keys)
-    {
-        if ($parameters[$p] -ne $null) { $v = $Parameters[$p] } else { $v = [DBNull]::Value } 
-        Write-Verbose "  $p = $v"
-
-        [void]$SqlCmd.Parameters.AddWithValue("@$p",$v)
-    }
-
-    if ($SqlConnection.State -eq [System.Data.ConnectionState]::Closed) { $SqlConnection.Open() }
-
-    $script.Invoke($SqlCmd)
-
-    $SqlCmd.Dispose()
-    if ($disposeConnection) { $SqlConnection.Dispose() }
+	Invoke-WebRequest -Uri $Uri -OutFile $tempfile
+	Add-Content $tempfile -Stream Zone.Identifier [ZoneTransfer]`r`nZoneId=3
+	Import-Module $tempfile -Force -Verbose:$false
+	Remove-Item $tempfile
 }
 
-function Get-SqlData {
-    [CmdletBinding()]
-    param (
-        [string]
-        $ConnectionString,
-        
-        [Parameter(ValueFromPipeline)]
-        [System.Data.SqlClient.SqlConnection]
-        $SqlConnection,
-        
-        [Parameter(Position=0)]
-        [ValidateNotNullorEmpty()]
-        [string]
-        $CommandText,
-        
-        [switch]
-        $CommandIsQuery,
-        
-        [Parameter(Position=1)]
-        [hashtable]
-        $Parameters=@{},
+Import-WebModule http://ps.2at.nl/2017/04/2atGeneral.psm1
 
-		[int]
-		$Timeout=-1
-    )
+Import-WebAssembly -Uri http://ps.2at.nl/2017/04/Microsoft.Xrm.Sdk.dll -Thumbprint '98ED99A67886D020C564923B7DF25E9AC019DF26'
+Import-WebAssembly -Uri http://ps.2at.nl/2017/04/Microsoft.Crm.Sdk.Proxy.dll -Thumbprint '98ED99A67886D020C564923B7DF25E9AC019DF26'
+
+Function Get-OrgServiceProxy {
+	Param (
+		[Parameter(Mandatory=$true)]
+		$OrgServiceUri,
+
+		[Parameter(Mandatory=$true)]
+		$Credentials
+	)
 	Get-CallerPreference -Cmdlet $PSCmdlet -SessionState $ExecutionContext.SessionState
 
-    execSql -ConnectionString $ConnectionString -SqlConnection $SqlConnection -CommandText $CommandText -CommandIsQuery $CommandIsQuery -Timeout $Timeout -Parameters $Parameters -Script {
-        param ( [System.Data.SqlClient.SqlCommand]$SqlCmd )
-        $dt=New-Object system.Data.DataTable
-        [void](New-Object system.Data.SqlClient.SqlDataAdapter($SqlCmd)).fill($dt)
-        $dt
-    }
+	if ($Credentials -is [PSCredential]) {
+		$Credentials = $Credentials.GetNetworkCredential()
+	}
+	if ($Credentials -is [System.Net.NetworkCredential]) {
+		$ccred = New-Object System.ServiceModel.Description.ClientCredentials
+		$ccred.UserName.UserName = $Credentials.UserName
+		$ccred.UserName.Password = $Credentials.Password
+		$Credentials = $ccred
+	}
+	if ($Credentials -isnot [System.ServiceModel.Description.ClientCredentials]) {
+		throw "Session credentials specified are of an unsupported type: $($Credentials.GetType().FullName), please use either a PSCredential, a NetworkCredential or a ClientCredentials"
+	}
+
+	Write-Verbose "Creating Proxy for uri: $OrgServiceUri and user: $($Credentials.UserName.UserName)"
+	New-Object Microsoft.Xrm.Sdk.Client.OrganizationServiceProxy($OrgServiceUri, $null, $Credentials, $null)
 }
 
-function Set-SqlData {
-    [CmdletBinding()]
-    param (
-        [string]
-        $ConnectionString,
-        
-        [Parameter(ValueFromPipeline)]
-        [System.Data.SqlClient.SqlConnection]
-        $SqlConnection,
-        
-        [Parameter(Position=0)]
-        [ValidateNotNullorEmpty()]
-        [string]
-        $CommandText,
-        
-        [switch]
-        $CommandIsQuery,
-
-        [Parameter(Position=1)]        
-        [hashtable]
-        $Parameters=@{},
-
-		[int]
-		$Timeout=-1
-    )
+Function Get-CrmRecord {
+	Param (
+		[Parameter(Mandatory=$true)]
+		[Microsoft.Xrm.Sdk.Client.OrganizationServiceProxy]
+		$OrgServiceProxy,
+		
+		[Parameter(Mandatory=$true)]
+		[string]
+		$FetchXml
+	)
 	Get-CallerPreference -Cmdlet $PSCmdlet -SessionState $ExecutionContext.SessionState
 
-    execSql -ConnectionString $ConnectionString -SqlConnection $SqlConnection -CommandText $CommandText -CommandIsQuery $CommandIsQuery -Timeout $Timeout -Parameters $Parameters -Script {
-        param ( [System.Data.SqlClient.SqlCommand]$SqlCmd )
-        [void]$SqlCmd.ExecuteNonQuery()
-    }
+	$OrgServiceProxy.RetrieveMultiple((New-Object Microsoft.Xrm.Sdk.Query.FetchExpression($FetchXml))).Entities
+}
+
+Function New-CrmRecord {
+	Param (
+		[Parameter(Mandatory=$true)]
+		[Microsoft.Xrm.Sdk.Client.OrganizationServiceProxy]
+		$OrgServiceProxy,
+
+		[Parameter(Mandatory=$true)]
+		[string]
+		$Entity,
+
+		$Attributes
+	)
+	Get-CallerPreference -Cmdlet $PSCmdlet -SessionState $ExecutionContext.SessionState
+	Write-Debug "New-CrmRecord: About to create $Entity"
+
+	$e = New-Object Microsoft.Xrm.Sdk.Entity($Entity)
+	$Attributes.Keys | %{ $e[$_]=$Attributes[$_] }
+
+	$n = $OrgServiceProxy.Create($e)
+
+	$c = New-Object Microsoft.Xrm.Sdk.Query.ColumnSet
+	$Attributes.Keys | %{ $c.Columns.Add($_) }
+	$OrgServiceProxy.Retrieve($Entity, $n, $c)
+}
+
+Function Edit-CrmRecord {
+	Param (
+		[Parameter(Mandatory=$true)]
+		[Microsoft.Xrm.Sdk.Client.OrganizationServiceProxy]
+		$OrgServiceProxy,
+
+		[Microsoft.Xrm.Sdk.Entity]
+		$Record,
+
+		$AttributeUpdates
+	)
+
+	$u = New-Object Microsoft.Xrm.Sdk.Entity($Record.LogicalName)
+	$u["$($Record.LogicalName)id"]=$Record["$($Record.LogicalName)id"]
+	$AttributeUpdates.Keys | %{ $u[$_]=$AttributeUpdates[$_] }
+	$OrgServiceProxy.Update($u)
+
+	$c = New-Object Microsoft.Xrm.Sdk.Query.ColumnSet
+	$Record.Attributes.Keys | %{ $c.Columns.Add($_) }
+	$AttributeUpdates.Keys | %{ $c.Columns.Add($_) }
+	$OrgServiceProxy.Retrieve($Record.LogicalName, $Record.Id, $c)
+}
+
+Function New-CrmListMember {
+	Param (
+		[Parameter(Mandatory=$true)]
+		[Microsoft.Xrm.Sdk.Client.OrganizationServiceProxy]
+		$OrgServiceProxy,
+
+		[Parameter(Mandatory=$true)]
+		[Guid]
+		$ListId,
+
+		[Parameter(Mandatory=$true)]
+		[Guid]
+		$MemberId
+	)
+	Get-CallerPreference -Cmdlet $PSCmdlet -SessionState $ExecutionContext.SessionState
+	Write-Debug "New-CrmListMember: About to add member $MemberId to list $ListId"
+
+	$m = New-Object Microsoft.Crm.Sdk.Messages.AddMemberListRequest
+	$m.EntityId = $MemberId
+	$m.ListId = $ListId
+	[void]$OrgServiceProxy.Execute($m)
+}
+
+Function Close-CrmRecord {
+	Param (
+		[Parameter(Mandatory=$true)]
+		[Microsoft.Xrm.Sdk.Client.OrganizationServiceProxy]
+		$OrgServiceProxy,
+
+		[Microsoft.Xrm.Sdk.Entity]
+		$Record
+	)
+	Get-CallerPreference -Cmdlet $PSCmdlet -SessionState $ExecutionContext.SessionState
+	Write-Debug "Close-CrmRecord: about to close $($Record.LogicalName) with id=$($Record.Id)"
+
+	$r = New-Object Microsoft.Crm.Sdk.Messages.SetStateRequest
+	$r.EntityMoniker = New-Object Microsoft.Xrm.Sdk.EntityReference($Record.LogicalName, $Record.Id)
+	$r.State = New-Object Microsoft.Xrm.Sdk.OptionSetValue(1)  # State 1: Closed
+	$r.Status = New-Object Microsoft.Xrm.Sdk.OptionSetValue(2) # Status 2: Closed
+
+	[void]$OrgServiceProxy.Execute($r)
 }
 
 Export-ModuleMember -Function Get-*
-Export-ModuleMember -Function Set-*
+Export-ModuleMember -Function New-*
+Export-ModuleMember -Function Edit-*
+Export-ModuleMember -Function Close-*
 
 
 
 # SIG # Begin signature block
 # MIIapQYJKoZIhvcNAQcCoIIaljCCGpICAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUKyX7ireXIO9uAotI7BnQSThf
-# L1GgghWUMIIEmTCCA4GgAwIBAgIPFojwOSVeY45pFDkH5jMLMA0GCSqGSIb3DQEB
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUOVVvHiuff2lODtLCeKxfFA8Y
+# bA2gghWUMIIEmTCCA4GgAwIBAgIPFojwOSVeY45pFDkH5jMLMA0GCSqGSIb3DQEB
 # BQUAMIGVMQswCQYDVQQGEwJVUzELMAkGA1UECBMCVVQxFzAVBgNVBAcTDlNhbHQg
 # TGFrZSBDaXR5MR4wHAYDVQQKExVUaGUgVVNFUlRSVVNUIE5ldHdvcmsxITAfBgNV
 # BAsTGGh0dHA6Ly93d3cudXNlcnRydXN0LmNvbTEdMBsGA1UEAxMUVVROLVVTRVJG
@@ -264,24 +283,24 @@ Export-ModuleMember -Function Set-*
 # EUNPTU9ETyBDQSBMaW1pdGVkMSMwIQYDVQQDExpDT01PRE8gUlNBIENvZGUgU2ln
 # bmluZyBDQQIRAIDR3v1Nwwc8nJBRgICA3CQwCQYFKw4DAhoFAKB4MBgGCisGAQQB
 # gjcCAQwxCjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYK
-# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFP+YzO6O
-# pryORo7fnRHFUFo86sUxMA0GCSqGSIb3DQEBAQUABIIBACgOyykpHV94YpTZNvPg
-# MXRt0V3o0Rg5MPzhXDCWiOzcsEhq1c75Xka8uSndKbWXsEzOa7hmA8+/iRKRswWu
-# z7R2f4Md2w5+97Ehe7eYPhV8MvASiOmRRSLcTcWhXHRewkYMvaSmkXzsV0uxVbJa
-# yVbgjBKAVgzenA4BZTAUSHMGYtuorVnFjvkmPVOL3DsIg0TdKcWDjuN5VWbhpe0D
-# BaKoeRtXKdvRZS/cECe9gguvTEZcYyUR6UsyT7MMR+fh4aAdqyV3ufp/lMLyqEFD
-# //PH7MuthaFlwYM32OTaNeDOgSfPwYmgnpXGPBUg+XrBMK94MjSVu/A/QvNEV3Y9
-# faChggJDMIICPwYJKoZIhvcNAQkGMYICMDCCAiwCAQEwgakwgZUxCzAJBgNVBAYT
+# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFK895M+S
+# gDnMp03YalFi/y8zyR9zMA0GCSqGSIb3DQEBAQUABIIBALe0yruSsuCRVad8NcO2
+# JaNaaVDTtrIgSm13rvFyVB52HkccqdYyWA4v7JdV5Pgl1lemk0jZwvEThcFZzgp/
+# RyNSrLfleI57nfagKAnhHJz+R2X8qtEGFNnZ/V1XRv94ZwHlszt9/D5jZ2OoOFTf
+# G0Ucm5HnOT3EMPxyKbi8NiTR0gC7T5gZJLQmfIfN7Bj8jLI1eX6580nT+LlOO4XM
+# nVm8H1vX6L+i2IdWSC2WnTrrEep5oSydf17a3idgnNXhykCA2Wgzhw2QWWmmodtQ
+# 5PBrwYOR+sn9SL8jsSp13dAb/cvFyF6Lm09eTM8gC8ZJSn2aWBirUc6uXFIKVotw
+# wryhggJDMIICPwYJKoZIhvcNAQkGMYICMDCCAiwCAQEwgakwgZUxCzAJBgNVBAYT
 # AlVTMQswCQYDVQQIEwJVVDEXMBUGA1UEBxMOU2FsdCBMYWtlIENpdHkxHjAcBgNV
 # BAoTFVRoZSBVU0VSVFJVU1QgTmV0d29yazEhMB8GA1UECxMYaHR0cDovL3d3dy51
 # c2VydHJ1c3QuY29tMR0wGwYDVQQDExRVVE4tVVNFUkZpcnN0LU9iamVjdAIPFojw
 # OSVeY45pFDkH5jMLMAkGBSsOAwIaBQCgXTAYBgkqhkiG9w0BCQMxCwYJKoZIhvcN
-# AQcBMBwGCSqGSIb3DQEJBTEPFw0xNzA1MTYxNTUyNDJaMCMGCSqGSIb3DQEJBDEW
-# BBRbmwXLvI+BEe6/3/J0fwOTftq+hzANBgkqhkiG9w0BAQEFAASCAQCqVFEa57tj
-# 6eo+xGi2N5R4gkGKhN6GgF0teEid5xjShThcknlOjc+UDbKFnM5CgdFyeMetWK87
-# fU2LgQoNcfFUm5KZhha7oRPIrOrMkiHhTqOXi+S7DBWWa2BOObZ1I3rZxyd2i91c
-# cO+6Tii1K8KORU5XJQKSFIUvoQOTltP1O5UEbfxrjPjTqi/gBNa+tMAJWOFmYQWh
-# rTPS3N2EOUnQP8QB7EDIcviqz8v+MdddPVnKc0j85TPHcUycQFnQoxzga/8eLwIS
-# VPROF8Rh45VOh2sjMzW1TvkRdNB1ii4w4TX5FMhiZLost6Rms3ASNt1yKhNHEU+s
-# svlsxnOf9yvw
+# AQcBMBwGCSqGSIb3DQEJBTEPFw0xNzA1MTYxNTUyMzNaMCMGCSqGSIb3DQEJBDEW
+# BBTUsdqudu8GxBTstXl2MPnek2SgrzANBgkqhkiG9w0BAQEFAASCAQA9KaadOqR/
+# +Vafe3Jbj9dpmqi2XxAgFQru+RQolcz80cF/92P77up8aoPRDrzKg8FHQlloM03a
+# aGxsJE6KaCPetNuUu1QnqwTFkiIZ54izO1AIFMTLoy9fo2I2j+byPL2/CweqHQEA
+# X3jJ8dpQO3si1w/i9LTe0gOF9rTZ/8Pck/ymXB5BLYXMlsjw5/nZVU1e9exEDiAk
+# 1awsQxvdBhnYwWK74fJgK77vvnEAq1wTjJ4C9AUuJVQ/Z6eyN5QAvz41eXiiDjlT
+# Jsg711cQPRSPG8gxktT2NfzSlJMkQQf+MlemH0K1DDdRP1Mgraw1qHiheJzZRFjy
+# PpzDK31g81ZR
 # SIG # End signature block
