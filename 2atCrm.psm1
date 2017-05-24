@@ -3,15 +3,24 @@ Set-StrictMode -Version 2.0
 
 Function Import-WebModule {
 	Param(
+		[Parameter(Mandatory=$true)]
 		$Uri
 	)
 
 	$tempfile = "$Env:TEMP\$(([Uri]$Uri).AbsolutePath.Replace('/','_'))"
 
-	Invoke-WebRequest -Uri $Uri -OutFile $tempfile
-	Add-Content $tempfile -Stream Zone.Identifier [ZoneTransfer]`r`nZoneId=3
-	Import-Module $tempfile -Force -Verbose:$false
-	Remove-Item $tempfile
+	try {
+		$h = if (Test-Path $tempfile) { @{ 'If-Modified-Since'=(Get-Item $tempfile).LastWriteTimeUtc.ToString([CultureInfo]::InvariantCulture) } }
+		Invoke-WebRequest -Uri $Uri -OutFile $tempfile -Headers $h
+		Add-Content $tempfile -Stream Zone.Identifier [ZoneTransfer]`r`nZoneId=3
+		Import-Module $tempfile -Force -Verbose:$false
+	} catch [System.Net.WebException] {
+		if ($_.Exception.Response.StatusCode -eq [System.Net.HttpStatusCode]::NotModified) {
+			Import-Module $tempfile -Verbose:$false
+		} else {
+			throw
+		}
+	}
 }
 
 Import-WebModule http://ps.2at.nl/2017/04/2atGeneral.psm1
@@ -162,8 +171,8 @@ Export-ModuleMember -Function Close-*
 # SIG # Begin signature block
 # MIIapQYJKoZIhvcNAQcCoIIaljCCGpICAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUOVVvHiuff2lODtLCeKxfFA8Y
-# bA2gghWUMIIEmTCCA4GgAwIBAgIPFojwOSVeY45pFDkH5jMLMA0GCSqGSIb3DQEB
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU5/hM+REDi5kIGytpyCthF+wT
+# A0CgghWUMIIEmTCCA4GgAwIBAgIPFojwOSVeY45pFDkH5jMLMA0GCSqGSIb3DQEB
 # BQUAMIGVMQswCQYDVQQGEwJVUzELMAkGA1UECBMCVVQxFzAVBgNVBAcTDlNhbHQg
 # TGFrZSBDaXR5MR4wHAYDVQQKExVUaGUgVVNFUlRSVVNUIE5ldHdvcmsxITAfBgNV
 # BAsTGGh0dHA6Ly93d3cudXNlcnRydXN0LmNvbTEdMBsGA1UEAxMUVVROLVVTRVJG
@@ -283,24 +292,24 @@ Export-ModuleMember -Function Close-*
 # EUNPTU9ETyBDQSBMaW1pdGVkMSMwIQYDVQQDExpDT01PRE8gUlNBIENvZGUgU2ln
 # bmluZyBDQQIRAIDR3v1Nwwc8nJBRgICA3CQwCQYFKw4DAhoFAKB4MBgGCisGAQQB
 # gjcCAQwxCjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYK
-# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFK895M+S
-# gDnMp03YalFi/y8zyR9zMA0GCSqGSIb3DQEBAQUABIIBALe0yruSsuCRVad8NcO2
-# JaNaaVDTtrIgSm13rvFyVB52HkccqdYyWA4v7JdV5Pgl1lemk0jZwvEThcFZzgp/
-# RyNSrLfleI57nfagKAnhHJz+R2X8qtEGFNnZ/V1XRv94ZwHlszt9/D5jZ2OoOFTf
-# G0Ucm5HnOT3EMPxyKbi8NiTR0gC7T5gZJLQmfIfN7Bj8jLI1eX6580nT+LlOO4XM
-# nVm8H1vX6L+i2IdWSC2WnTrrEep5oSydf17a3idgnNXhykCA2Wgzhw2QWWmmodtQ
-# 5PBrwYOR+sn9SL8jsSp13dAb/cvFyF6Lm09eTM8gC8ZJSn2aWBirUc6uXFIKVotw
-# wryhggJDMIICPwYJKoZIhvcNAQkGMYICMDCCAiwCAQEwgakwgZUxCzAJBgNVBAYT
+# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFPToHe4c
+# lE+jDrhrLx9pziFeoTmbMA0GCSqGSIb3DQEBAQUABIIBAILQvw2RPWaBra9eQw4m
+# Yh2x8ypNeorLqYktaCfJQGmefhIwGB1Cn9G78z7pM8aabMGBUqpP6EZHm6ptAM3h
+# iPjqoGjupg3wv5dJ77pri8KPnab0zEPXznFsD6d2qd8GCDZeu97+QUR4GRBUVoQm
+# D7YOvjoLuZs8pVxvD0zFUmpwddQ89vzXI4y6lVhHaTjsWlTDFHyAZ6AsX0ITf/At
+# JXvhl0vyaRQwPyYr5K+/jdh4iNe+NLAM8o/L04bZyWmiDXC2N887YFNDsdHAPkxG
+# /S7NObV6//uczjrQVtDTC2v+dRYxxJ1Qjb+Bv/YT/OR3n+sMVhxhSqA2TbZro74+
+# hqGhggJDMIICPwYJKoZIhvcNAQkGMYICMDCCAiwCAQEwgakwgZUxCzAJBgNVBAYT
 # AlVTMQswCQYDVQQIEwJVVDEXMBUGA1UEBxMOU2FsdCBMYWtlIENpdHkxHjAcBgNV
 # BAoTFVRoZSBVU0VSVFJVU1QgTmV0d29yazEhMB8GA1UECxMYaHR0cDovL3d3dy51
 # c2VydHJ1c3QuY29tMR0wGwYDVQQDExRVVE4tVVNFUkZpcnN0LU9iamVjdAIPFojw
 # OSVeY45pFDkH5jMLMAkGBSsOAwIaBQCgXTAYBgkqhkiG9w0BCQMxCwYJKoZIhvcN
-# AQcBMBwGCSqGSIb3DQEJBTEPFw0xNzA1MTYxNTUyMzNaMCMGCSqGSIb3DQEJBDEW
-# BBTUsdqudu8GxBTstXl2MPnek2SgrzANBgkqhkiG9w0BAQEFAASCAQA9KaadOqR/
-# +Vafe3Jbj9dpmqi2XxAgFQru+RQolcz80cF/92P77up8aoPRDrzKg8FHQlloM03a
-# aGxsJE6KaCPetNuUu1QnqwTFkiIZ54izO1AIFMTLoy9fo2I2j+byPL2/CweqHQEA
-# X3jJ8dpQO3si1w/i9LTe0gOF9rTZ/8Pck/ymXB5BLYXMlsjw5/nZVU1e9exEDiAk
-# 1awsQxvdBhnYwWK74fJgK77vvnEAq1wTjJ4C9AUuJVQ/Z6eyN5QAvz41eXiiDjlT
-# Jsg711cQPRSPG8gxktT2NfzSlJMkQQf+MlemH0K1DDdRP1Mgraw1qHiheJzZRFjy
-# PpzDK31g81ZR
+# AQcBMBwGCSqGSIb3DQEJBTEPFw0xNzA1MjQwNjQ3MjBaMCMGCSqGSIb3DQEJBDEW
+# BBRNN3Znr/9b1QaC3ab0nIbcfw2/LDANBgkqhkiG9w0BAQEFAASCAQCl4UPF+Y24
+# htLnJHKhi/z9L5jH+V58ywRILHVRnJWwHwHThVt8E2gbzhWwD3S4sW1IlOMYcWQV
+# 6qSeml1XXZBovZRk4nDO1/Mru6KzF3CWxJZxYZP86MEsGM0eqcD2gEW9iP54D7aB
+# hQ5Gr2rAilRDcOBkAOBeO4h7GcSinGU4wBCkJtCH2Ty4ndm/ty5/KjDHLDpLDsQ2
+# 0bT9NWB/aANLiiqPe+ezirGxMURgEwxTyntS3rF5Qknek+VYI26B9x1huJhPVy9+
+# MxAGNAnNjHzYrSABXTW4SLBz3bPEbHKGtddmQEte70AusNutoQt16B9orU5keFdH
+# +OnA2TJEHqx8
 # SIG # End signature block

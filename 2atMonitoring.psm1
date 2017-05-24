@@ -13,10 +13,18 @@ Function Import-WebModule {
 
 	$tempfile = "$Env:TEMP\$(([Uri]$Uri).AbsolutePath.Replace('/','_'))"
 
-	Invoke-WebRequest -Uri $Uri -OutFile $tempfile
-	Add-Content $tempfile -Stream Zone.Identifier [ZoneTransfer]`r`nZoneId=3
-	Import-Module $tempfile -Force -Verbose:$false
-	Remove-Item $tempfile
+	try {
+		$h = if (Test-Path $tempfile) { @{ 'If-Modified-Since'=(Get-Item $tempfile).LastWriteTimeUtc.ToString([CultureInfo]::InvariantCulture) } }
+		Invoke-WebRequest -Uri $Uri -OutFile $tempfile -Headers $h
+		Add-Content $tempfile -Stream Zone.Identifier [ZoneTransfer]`r`nZoneId=3
+		Import-Module $tempfile -Force -Verbose:$false
+	} catch [System.Net.WebException] {
+		if ($_.Exception.Response.StatusCode -eq [System.Net.HttpStatusCode]::NotModified) {
+			Import-Module $tempfile -Verbose:$false
+		} else {
+			throw
+		}
+	}
 }
 
 Import-WebModule http://ps.2at.nl/2017/04/2atWeb.psm1
@@ -173,6 +181,8 @@ Function UpdateSession {
 	if ($Step['Proxy']) { $Session.Proxy = New-Object System.Net.WebProxy $Step.Proxy	}
 	if ($Step['LoginSteps']) { $Session.LoginSteps = $Step.LoginSteps }
 	if ($Step['Servers']) { SetSessionCookies -Session $Session -TMGInfo $TMGInfo -Servers $Step.Servers }
+	if ($Step['TargetServer']) { $Session.TargetServer = $Step.TargetServer }
+	if ($Step['NextLogMinutes']) { $Session.NextLogMinutes = $Step.NextLogMinutes }
 	if ($Step['Credentials']) {
 		if ($Step.Credentials -is [PSCredential]) {
 			$Session.Credentials = $Step.Credentials.GetNetworkCredential()
@@ -204,7 +214,8 @@ Function NewSession {
 		Credentials=$null
 		History=@()
 		RequestNumber=1
-		Monitor=if ($Step['Monitor']) { $Step.Monitor } else { @{} }
+		TargetServer=$null
+		NextLogMinutes=10
 	}	
 
 	if ($Session.SqlConnection) {
@@ -341,6 +352,8 @@ Function LogSteps {
 			Url=$WebResponse.Url
 			SessionId=$Session.Id
 			Monitor=$Monitor
+			TargetServer=$Session.TargetServer
+			NextLogMinutes=$Session.NextLogMinutes
 			StepNumber=$StepNumber
 			RequestNumber=$Session.RequestNumber++
 			IsStepResult=($i -eq $Session.History.Count)
@@ -459,8 +472,8 @@ Export-ModuleMember -Function Invoke-*
 # SIG # Begin signature block
 # MIIapQYJKoZIhvcNAQcCoIIaljCCGpICAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUaPOET3Zw17negp8I5m1jTpYA
-# SoigghWUMIIEmTCCA4GgAwIBAgIPFojwOSVeY45pFDkH5jMLMA0GCSqGSIb3DQEB
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQURMjkNL/YyFv5QqdFnF+b/+gA
+# 21qgghWUMIIEmTCCA4GgAwIBAgIPFojwOSVeY45pFDkH5jMLMA0GCSqGSIb3DQEB
 # BQUAMIGVMQswCQYDVQQGEwJVUzELMAkGA1UECBMCVVQxFzAVBgNVBAcTDlNhbHQg
 # TGFrZSBDaXR5MR4wHAYDVQQKExVUaGUgVVNFUlRSVVNUIE5ldHdvcmsxITAfBgNV
 # BAsTGGh0dHA6Ly93d3cudXNlcnRydXN0LmNvbTEdMBsGA1UEAxMUVVROLVVTRVJG
@@ -580,24 +593,24 @@ Export-ModuleMember -Function Invoke-*
 # EUNPTU9ETyBDQSBMaW1pdGVkMSMwIQYDVQQDExpDT01PRE8gUlNBIENvZGUgU2ln
 # bmluZyBDQQIRAIDR3v1Nwwc8nJBRgICA3CQwCQYFKw4DAhoFAKB4MBgGCisGAQQB
 # gjcCAQwxCjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYK
-# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFHgXo77f
-# GHLNy27Jsfza5hn9QugyMA0GCSqGSIb3DQEBAQUABIIBAH4Y3BBgZc1cJ4Og21AV
-# grMmQ5vaVM1YPSb7BX4k6ywrP1VC2O8cZMUt6ZIAhBxEkeDrGPJaWf3Hku5h9TcM
-# 6C6+TMPqc0xpAS8sJWPDDdkOQHJgRCUGD/dzSSxL9Fvrdo6Rin4M9rQ2YFhx/ar3
-# PCEkLQ65OPRsc8iWfc4DmoQrZ5s94/+8dUzYJdtGIvEAExSLZewbU47zg/3DZuB9
-# tC2xz/iipQxMYYpFeLLiEVGhMuFXe2kP+dkO8AGSE+tE/96nx+JLXOEVGnjCxID6
-# TzMTfl6DNgf5agFji4YlPb9BRICrcU6Xetur2jByGPUCP6XJt72+8it7VgTn+32Y
-# a+KhggJDMIICPwYJKoZIhvcNAQkGMYICMDCCAiwCAQEwgakwgZUxCzAJBgNVBAYT
+# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFKQ5WOke
+# kb13R0SNkU4Wm8ky1pQvMA0GCSqGSIb3DQEBAQUABIIBAIKNgEvbskx/ZFdAhTTr
+# yMkNi/wAEDXStBflnC44d8NWZH9ZpqbNn5I4jzWwLAptEtrWVCGiW+MLOc3opBPA
+# joiBkJRWCP9as4FFGFlbrLb37BwiqfVxVKCZs82++U7EjmbyDhih9102tOU9/OZa
+# GSZce9gNEHnrqKawWW4ka///hduEdWov3MziTUTPv58xYjEx5iTHU+jG5ylP7jpf
+# 6bsS1KZwQGFQkWjN2AHV/yL87Ye8T2/3tqif5sL1Vq1mttfzD/ZaBJ72g5pPhDfP
+# v9iXT588qwycdtwvadGDAtP8YI2kzSODun9OxR4Iah7/JVMvistwNN2uInGgVBU2
+# Oo2hggJDMIICPwYJKoZIhvcNAQkGMYICMDCCAiwCAQEwgakwgZUxCzAJBgNVBAYT
 # AlVTMQswCQYDVQQIEwJVVDEXMBUGA1UEBxMOU2FsdCBMYWtlIENpdHkxHjAcBgNV
 # BAoTFVRoZSBVU0VSVFJVU1QgTmV0d29yazEhMB8GA1UECxMYaHR0cDovL3d3dy51
 # c2VydHJ1c3QuY29tMR0wGwYDVQQDExRVVE4tVVNFUkZpcnN0LU9iamVjdAIPFojw
 # OSVeY45pFDkH5jMLMAkGBSsOAwIaBQCgXTAYBgkqhkiG9w0BCQMxCwYJKoZIhvcN
-# AQcBMBwGCSqGSIb3DQEJBTEPFw0xNzA1MTcwNjA3NTFaMCMGCSqGSIb3DQEJBDEW
-# BBRb/t3bgtU+sC8Y34gdlrmIXl8KlTANBgkqhkiG9w0BAQEFAASCAQCBJikE2qYC
-# KodyVm1Fvk5iWK/oh3pO3lVZnaQvO1PMyBNsupv8Xa684PkuEr3VGVWOFBiMz/uu
-# H5iJpo/emyTj+7oG6ep+cW9qsbqvg0PIbMf4fmbd1XlURLMzSI82smLJab3jFAJO
-# SsBCct1scHMzak6Up/8TYhtZKcZh8zcZa3OlQXt+TOsywVQYx9jhCfmuzv5MVdz6
-# sD0j1eMzGc/LK1yT/+OSS9PXPcRmpVlFdXl1rlEU054+8z7uNLD0/GHqiREzdK5s
-# 8niKX5lLDJDHED4K8w7X8pHN5Vp2kXE7i6r2TrmEtQ5o/9ze6xr1CKCRIV+L3G1m
-# UbJ5v7lEZ45Z
+# AQcBMBwGCSqGSIb3DQEJBTEPFw0xNzA1MjQwNjQ3MjNaMCMGCSqGSIb3DQEJBDEW
+# BBQ05JbUyPR3MG+BL3lBbGZ7gu/UTzANBgkqhkiG9w0BAQEFAASCAQCCqjB/6A8A
+# hq36ImAdQaz+iJDrD8inql0hfspxk5CLx0fwjXlQJPGBf5+7u9mm1LaAb9CuVLti
+# P1cCcsIaw1I+BYte9CyB6ZU1dP2IV1y0YRzK2ljPUOYL4niq57Ru1o+vwMk8ZuMF
+# sXADH1LM3Q79bSpHB15tTtmmNNG6Kfb+f0XmV4qeLyN93rKQEIGhgknxRdwvTfWw
+# EOfgc/9ByFuSlvk0dyEWz+3KcOH+eQ0vyWVtuyM8GhIEges/XW956gIJXyCE78K2
+# 69Ao8rzKqMFZylRFfb4hPCFcsKM1KKi86bm4YK6/kNK8cbN0SF+5jpL407T/b3CU
+# eZEi69HLORrc
 # SIG # End signature block
