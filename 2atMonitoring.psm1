@@ -110,6 +110,8 @@ Function ProcessForm {
 	Param(
 		[HashTable]$FormData,
 
+		[string]$FormId,
+
 		[Parameter(Mandatory=$true)]
 		[PSCustomObject]$Previous,
 		
@@ -119,7 +121,17 @@ Function ProcessForm {
 	
 	$htmldoc = New-Object HtmlAgilityPack.HtmlDocument
 	$htmldoc.LoadHtml($Previous.ResponseBody)
-	$form = $htmldoc.DocumentNode.SelectNodes('//form')[0]
+	if ($FormId) {
+		$form = $htmldoc.DocumentNode.SelectNodes("//form[@id='$FormId']")[0]
+		if (!$form) { throw "No form with id='$FormId' found" }
+	} else {
+		$forms = $htmldoc.DocumentNode.SelectNodes('//form')
+		if (!$forms) { throw 'No forms found' }
+		if ($forms.Count -gt 1) {
+			Write-Warning "Found $($forms.Count) forms but no FormId was specified, selecting the first"
+		}
+		$form=$forms[0]
+	}
 	$l = RelToAbs $Previous.Url $form.Attributes['action'].Value
 
 	$b = New-Object 'System.Collections.Generic.Dictionary[string,string]'
@@ -412,7 +424,7 @@ Function RunStep {
 		}
 		'Form'	{
 			Write-Debug "FORM"
-			ProcessForm -FormData $Step['FormData'] -Previous $Previous -Session $Session
+			ProcessForm -FormId $Step['FormId'] -FormData $Step['FormData'] -Previous $Previous -Session $Session
 		}
 		default {
 			throw "Unrecognized step $($CurrentStep.Action)"
@@ -472,8 +484,8 @@ Export-ModuleMember -Function Invoke-*
 # SIG # Begin signature block
 # MIIapQYJKoZIhvcNAQcCoIIaljCCGpICAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQURMjkNL/YyFv5QqdFnF+b/+gA
-# 21qgghWUMIIEmTCCA4GgAwIBAgIPFojwOSVeY45pFDkH5jMLMA0GCSqGSIb3DQEB
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUG/CExhQyG2c87T6cH1bDU8it
+# XoSgghWUMIIEmTCCA4GgAwIBAgIPFojwOSVeY45pFDkH5jMLMA0GCSqGSIb3DQEB
 # BQUAMIGVMQswCQYDVQQGEwJVUzELMAkGA1UECBMCVVQxFzAVBgNVBAcTDlNhbHQg
 # TGFrZSBDaXR5MR4wHAYDVQQKExVUaGUgVVNFUlRSVVNUIE5ldHdvcmsxITAfBgNV
 # BAsTGGh0dHA6Ly93d3cudXNlcnRydXN0LmNvbTEdMBsGA1UEAxMUVVROLVVTRVJG
@@ -593,24 +605,24 @@ Export-ModuleMember -Function Invoke-*
 # EUNPTU9ETyBDQSBMaW1pdGVkMSMwIQYDVQQDExpDT01PRE8gUlNBIENvZGUgU2ln
 # bmluZyBDQQIRAIDR3v1Nwwc8nJBRgICA3CQwCQYFKw4DAhoFAKB4MBgGCisGAQQB
 # gjcCAQwxCjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYK
-# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFKQ5WOke
-# kb13R0SNkU4Wm8ky1pQvMA0GCSqGSIb3DQEBAQUABIIBAIKNgEvbskx/ZFdAhTTr
-# yMkNi/wAEDXStBflnC44d8NWZH9ZpqbNn5I4jzWwLAptEtrWVCGiW+MLOc3opBPA
-# joiBkJRWCP9as4FFGFlbrLb37BwiqfVxVKCZs82++U7EjmbyDhih9102tOU9/OZa
-# GSZce9gNEHnrqKawWW4ka///hduEdWov3MziTUTPv58xYjEx5iTHU+jG5ylP7jpf
-# 6bsS1KZwQGFQkWjN2AHV/yL87Ye8T2/3tqif5sL1Vq1mttfzD/ZaBJ72g5pPhDfP
-# v9iXT588qwycdtwvadGDAtP8YI2kzSODun9OxR4Iah7/JVMvistwNN2uInGgVBU2
-# Oo2hggJDMIICPwYJKoZIhvcNAQkGMYICMDCCAiwCAQEwgakwgZUxCzAJBgNVBAYT
+# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFJspEkFl
+# hY660ofu6s0O2KNvDEX1MA0GCSqGSIb3DQEBAQUABIIBAAXA/wBB6n5TdJIgGg7f
+# Gju83AgKMFCRS+EN8fO9tz6CTU+kerPthlvTxh0qlX4CDfGsDnymmhrF99b2BfiB
+# YBUfZ4fsb9vos/sW9QePZeWyaYBTv5YX6BXYXJEEtBHh9lV8fhtEwmMCUcxVKVhG
+# KCHW8Xt+uoxTwvJFn4quC9i8SaMPeeWxOQi3b/AF99KekJ8ptq/q8Uw25V7/st9I
+# mMG4oEX8pTqooCbOpldwshdbVDWorlj0J6jLHfb/gdJH8920XtoZYgxZLt0/a5gt
+# b8AlHODXDlUbeMNnvYnx9a9y0ANcBjBiLbfITeY4aex2V6LOq8pbAWUhTtQKael7
+# 9FOhggJDMIICPwYJKoZIhvcNAQkGMYICMDCCAiwCAQEwgakwgZUxCzAJBgNVBAYT
 # AlVTMQswCQYDVQQIEwJVVDEXMBUGA1UEBxMOU2FsdCBMYWtlIENpdHkxHjAcBgNV
 # BAoTFVRoZSBVU0VSVFJVU1QgTmV0d29yazEhMB8GA1UECxMYaHR0cDovL3d3dy51
 # c2VydHJ1c3QuY29tMR0wGwYDVQQDExRVVE4tVVNFUkZpcnN0LU9iamVjdAIPFojw
 # OSVeY45pFDkH5jMLMAkGBSsOAwIaBQCgXTAYBgkqhkiG9w0BCQMxCwYJKoZIhvcN
-# AQcBMBwGCSqGSIb3DQEJBTEPFw0xNzA1MjQwNjQ3MjNaMCMGCSqGSIb3DQEJBDEW
-# BBQ05JbUyPR3MG+BL3lBbGZ7gu/UTzANBgkqhkiG9w0BAQEFAASCAQCCqjB/6A8A
-# hq36ImAdQaz+iJDrD8inql0hfspxk5CLx0fwjXlQJPGBf5+7u9mm1LaAb9CuVLti
-# P1cCcsIaw1I+BYte9CyB6ZU1dP2IV1y0YRzK2ljPUOYL4niq57Ru1o+vwMk8ZuMF
-# sXADH1LM3Q79bSpHB15tTtmmNNG6Kfb+f0XmV4qeLyN93rKQEIGhgknxRdwvTfWw
-# EOfgc/9ByFuSlvk0dyEWz+3KcOH+eQ0vyWVtuyM8GhIEges/XW956gIJXyCE78K2
-# 69Ao8rzKqMFZylRFfb4hPCFcsKM1KKi86bm4YK6/kNK8cbN0SF+5jpL407T/b3CU
-# eZEi69HLORrc
+# AQcBMBwGCSqGSIb3DQEJBTEPFw0xNzA2MDgxNDE1NDNaMCMGCSqGSIb3DQEJBDEW
+# BBS1OM7oRsiuhTObIxUNXpZ2jfhF8DANBgkqhkiG9w0BAQEFAASCAQCWWls7/v+L
+# ppd0Xg64FFJ4HfYHl1K3ZYDiP5dRSO/zAmalaJr5CctC9ge8nGqzdpOF+Pq8kgXv
+# JBVDEXR5n6mcW7Gcn2g1tAHNpSoVXWllztIdfjZPgLVoEflk6ZE+4xHx6IwYkPwS
+# GEWaWkp/9SzrOfg138Xll3HtHZDw/kPjd4oU91d/VebtocTvmlJJC96VDW2ya7bB
+# AuwNsyEKkj1cg2/FMsPTYHpRN5sHjBGv7pud4JTrBTbV6fChooJMUl2nzWNcSF2/
+# 7/xxw+TvimgW+636dVZnb5ZZqdKVBPjnWcbphMqgxPhSrDglrVT4lD6b+4pzpaoy
+# uPb1gk7K9ya+
 # SIG # End signature block
