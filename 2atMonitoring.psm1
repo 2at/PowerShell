@@ -174,6 +174,53 @@ Function ProcessLink {
 	Step -url $l -Session $Session
 }
 
+Function ProcessScript {
+	Param(
+		[Parameter(Mandatory=$true)]
+		[string]$ScriptId,
+
+		[Parameter(Mandatory=$true)]
+		[string]$ScriptRegEx,
+
+		[Parameter(Mandatory=$true)]
+		[PSCustomObject]$Previous,
+		
+		[Parameter(Mandatory=$true)]
+		[PSCustomObject]$Session
+	)
+	
+	$htmldoc = New-Object HtmlAgilityPack.HtmlDocument
+	$htmldoc.LoadHtml($Previous.ResponseBody)
+	$s = $htmldoc.DocumentNode.SelectNodes('//script') | ?{ $_ -and $_.InnerText.Trim() -match [Regex]::Escape($ScriptId) }
+	
+	if (!$s) { throw "No script block matching '$ScriptId' found (using literal match)" }
+	
+	if ($s -is [HtmlAgilityPack.HtmlNodeCollection]) {
+		Write-Warning 'Multiple matching script blocks found, using the first'
+		$s = $s[0]
+	}
+	
+	if (!($s.InnerText.Trim() -match $ScriptRegEx)) {
+		throw "No url could be found: Script block doesn't match '$ScriptRegEx'"
+	}
+	
+	if ($Matches['link']) {
+		$l = RelToAbs $Previous.Url $Matches['link']
+	} else {
+		if ($Matches.Count -eq 1) {
+			Write-Warning 'No match groups found, using full match as link to follow'
+			$l = RelToAbs $Previous.Url $Matches[0]
+		} else {
+			if ($Matches.Count -gt 2) {
+				Write-Warning 'Found multiple match groups, using first (create a named group ''link'' to specify witch group to use)'
+			}
+			$l = RelToAbs $Previous.Url $Matches[1]
+		}
+	}
+	
+	Step -url $l -Session $Session
+}
+
 Function UpdateSession {
 	Param(
 		[Parameter(Mandatory=$true)]	
@@ -414,17 +461,21 @@ Function RunStep {
 		
 	switch ($Step.Action)
 	{
-		'Url'	{
+		'Url' {
 			Write-Debug "URL: $($Step.Url)"
 			Step -Url $Step.Url -Session $Session
 		}
-		'Link'	{
+		'Link' {
 			Write-Debug "LINK: $($Step.LinkText)"
 			ProcessLink -LinkText $Step.LinkText -Previous $Previous -Session $Session
 		}
-		'Form'	{
+		'Form' {
 			Write-Debug "FORM"
 			ProcessForm -FormId $Step['FormId'] -FormData $Step['FormData'] -Previous $Previous -Session $Session
+		}
+		'Script' {
+			Write-Debug 'SCRIPT'
+			ProcessScript -ScriptId $Step['ScriptId'] -ScriptRegEx $Step['ScriptRegEx'] -Previous $Previous -Session $Session
 		}
 		default {
 			throw "Unrecognized step $($CurrentStep.Action)"
@@ -480,12 +531,11 @@ Export-ModuleMember -Function Set-*
 Export-ModuleMember -Function Invoke-*
 
 
-
 # SIG # Begin signature block
 # MIIapQYJKoZIhvcNAQcCoIIaljCCGpICAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUG/CExhQyG2c87T6cH1bDU8it
-# XoSgghWUMIIEmTCCA4GgAwIBAgIPFojwOSVeY45pFDkH5jMLMA0GCSqGSIb3DQEB
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUX4/2a2uu6cuq2HdgwhtD/4rq
+# wj2gghWUMIIEmTCCA4GgAwIBAgIPFojwOSVeY45pFDkH5jMLMA0GCSqGSIb3DQEB
 # BQUAMIGVMQswCQYDVQQGEwJVUzELMAkGA1UECBMCVVQxFzAVBgNVBAcTDlNhbHQg
 # TGFrZSBDaXR5MR4wHAYDVQQKExVUaGUgVVNFUlRSVVNUIE5ldHdvcmsxITAfBgNV
 # BAsTGGh0dHA6Ly93d3cudXNlcnRydXN0LmNvbTEdMBsGA1UEAxMUVVROLVVTRVJG
@@ -605,24 +655,24 @@ Export-ModuleMember -Function Invoke-*
 # EUNPTU9ETyBDQSBMaW1pdGVkMSMwIQYDVQQDExpDT01PRE8gUlNBIENvZGUgU2ln
 # bmluZyBDQQIRAIDR3v1Nwwc8nJBRgICA3CQwCQYFKw4DAhoFAKB4MBgGCisGAQQB
 # gjcCAQwxCjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYK
-# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFJspEkFl
-# hY660ofu6s0O2KNvDEX1MA0GCSqGSIb3DQEBAQUABIIBAAXA/wBB6n5TdJIgGg7f
-# Gju83AgKMFCRS+EN8fO9tz6CTU+kerPthlvTxh0qlX4CDfGsDnymmhrF99b2BfiB
-# YBUfZ4fsb9vos/sW9QePZeWyaYBTv5YX6BXYXJEEtBHh9lV8fhtEwmMCUcxVKVhG
-# KCHW8Xt+uoxTwvJFn4quC9i8SaMPeeWxOQi3b/AF99KekJ8ptq/q8Uw25V7/st9I
-# mMG4oEX8pTqooCbOpldwshdbVDWorlj0J6jLHfb/gdJH8920XtoZYgxZLt0/a5gt
-# b8AlHODXDlUbeMNnvYnx9a9y0ANcBjBiLbfITeY4aex2V6LOq8pbAWUhTtQKael7
-# 9FOhggJDMIICPwYJKoZIhvcNAQkGMYICMDCCAiwCAQEwgakwgZUxCzAJBgNVBAYT
+# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFN+c5ol3
+# EisuSJAl++mOQ2GebPVRMA0GCSqGSIb3DQEBAQUABIIBAAoKmUzzFnU4W3OXsesH
+# qHxiZq4rTyq49Xxi+Wx1KxMBsP0YSmTmwEYDdTt1h8LJ5szp6ZAOvikse4uxpvRB
+# xIe5m4r8M/nyWp+XQqq0b4HKuIbwahpZC7+q/qjXZ9LGYUJWAzu8NyYv9AwGhty7
+# EF4T4iignVofOXyQUoh8jd1RfLpST7y3EffaC55Wubm8c2hU5iZV1ddMf9WKSxpZ
+# y2ItxzvqnXHofjFAW/ipaKlxlnALXNGSvnGE51Vv/kAZDbsYR/v4EFQRADsMhadW
+# fsqmz4nXFx0XUSg6CaZ/pxiXXvePcBHvXF8h1LHqvUm6Ai2NoFpB3cdQ++AWUcf0
+# AWuhggJDMIICPwYJKoZIhvcNAQkGMYICMDCCAiwCAQEwgakwgZUxCzAJBgNVBAYT
 # AlVTMQswCQYDVQQIEwJVVDEXMBUGA1UEBxMOU2FsdCBMYWtlIENpdHkxHjAcBgNV
 # BAoTFVRoZSBVU0VSVFJVU1QgTmV0d29yazEhMB8GA1UECxMYaHR0cDovL3d3dy51
 # c2VydHJ1c3QuY29tMR0wGwYDVQQDExRVVE4tVVNFUkZpcnN0LU9iamVjdAIPFojw
 # OSVeY45pFDkH5jMLMAkGBSsOAwIaBQCgXTAYBgkqhkiG9w0BCQMxCwYJKoZIhvcN
-# AQcBMBwGCSqGSIb3DQEJBTEPFw0xNzA2MDgxNDE1NDNaMCMGCSqGSIb3DQEJBDEW
-# BBS1OM7oRsiuhTObIxUNXpZ2jfhF8DANBgkqhkiG9w0BAQEFAASCAQCWWls7/v+L
-# ppd0Xg64FFJ4HfYHl1K3ZYDiP5dRSO/zAmalaJr5CctC9ge8nGqzdpOF+Pq8kgXv
-# JBVDEXR5n6mcW7Gcn2g1tAHNpSoVXWllztIdfjZPgLVoEflk6ZE+4xHx6IwYkPwS
-# GEWaWkp/9SzrOfg138Xll3HtHZDw/kPjd4oU91d/VebtocTvmlJJC96VDW2ya7bB
-# AuwNsyEKkj1cg2/FMsPTYHpRN5sHjBGv7pud4JTrBTbV6fChooJMUl2nzWNcSF2/
-# 7/xxw+TvimgW+636dVZnb5ZZqdKVBPjnWcbphMqgxPhSrDglrVT4lD6b+4pzpaoy
-# uPb1gk7K9ya+
+# AQcBMBwGCSqGSIb3DQEJBTEPFw0xNzA3MDkxMjU3MDlaMCMGCSqGSIb3DQEJBDEW
+# BBSNXrTIxRpw0uFsOWm4p7BXK9lPZjANBgkqhkiG9w0BAQEFAASCAQAZmAn/Bo5c
+# T8DeeCgTk6Vclf1Q24eXrd+AJ57vPKM8Fg2VlRrJwXIskikgK6cKoPUGnKR0pj0V
+# GOxKIRLavzBYgURKNN1IkVPioOLd9ml0JxmP5zHZ/r3wBuUi+soZi5DHmE9opZnw
+# VLz69Z+igcAiiuNrIZYgbwEzTG4SRYjsLhhylU1Q85gdeXcd4BEmr/IV8S7EqTrz
+# rElzTWX6T77VmP+TIBt9OhKwRHyytRr6y124ViFaD49RO7BYs3m9n9k9oYczB5Ez
+# 9bjc0P+ZJ/Bvhow4YWBVFRBeXU69p4zkfc2b85M+YS+Z9xPJb+c5aC38i7dyKd1P
+# iYAzglDN7NKd
 # SIG # End signature block
