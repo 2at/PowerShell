@@ -19,11 +19,13 @@ Function Import-WebModule {
 		Add-Content $tempfile -Stream Zone.Identifier [ZoneTransfer]`r`nZoneId=3
 		Import-Module $tempfile -Force -Verbose:$false
 	} catch [System.Net.WebException] {
-		if ($_.Exception.Response.StatusCode -eq [System.Net.HttpStatusCode]::NotModified) {
-			Import-Module $tempfile -Verbose:$false
-		} else {
-			throw
-		}
+        if (!$h) { throw }
+		
+        if ($_.Exception.Response -and $_.Exception.Response.StatusCode -eq [System.Net.HttpStatusCode]::NotModified) {
+            Write-Verbose "WebModule $Uri was not modified on server, using valid cache"
+		} else { Write-Warning "WebModule $Uri could not be downloaded, using last downloaded file $($h.'If-Modified-Since')" }
+        
+        Import-Module $tempfile -Verbose:$false
 	}
 }
 
@@ -539,8 +541,8 @@ Export-ModuleMember -Function Invoke-*
 # SIG # Begin signature block
 # MIIapQYJKoZIhvcNAQcCoIIaljCCGpICAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU6fJOOdX996YC3qwzqMTZ0AGS
-# WQOgghWUMIIEmTCCA4GgAwIBAgIPFojwOSVeY45pFDkH5jMLMA0GCSqGSIb3DQEB
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUAp6sJQiQ+3afeUD2FsiWCEfq
+# p5GgghWUMIIEmTCCA4GgAwIBAgIPFojwOSVeY45pFDkH5jMLMA0GCSqGSIb3DQEB
 # BQUAMIGVMQswCQYDVQQGEwJVUzELMAkGA1UECBMCVVQxFzAVBgNVBAcTDlNhbHQg
 # TGFrZSBDaXR5MR4wHAYDVQQKExVUaGUgVVNFUlRSVVNUIE5ldHdvcmsxITAfBgNV
 # BAsTGGh0dHA6Ly93d3cudXNlcnRydXN0LmNvbTEdMBsGA1UEAxMUVVROLVVTRVJG
@@ -660,24 +662,24 @@ Export-ModuleMember -Function Invoke-*
 # EUNPTU9ETyBDQSBMaW1pdGVkMSMwIQYDVQQDExpDT01PRE8gUlNBIENvZGUgU2ln
 # bmluZyBDQQIRAIDR3v1Nwwc8nJBRgICA3CQwCQYFKw4DAhoFAKB4MBgGCisGAQQB
 # gjcCAQwxCjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYK
-# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFKvQOUZ0
-# 3DYsWzSpUpGFcGb0gt4xMA0GCSqGSIb3DQEBAQUABIIBAGj8PSNILGE0VzV81rHi
-# QB93L74gYVPcg+/OPHN2W3fgCV2teP8ap88zfkTt0m+k1YpGEh4k9WoMyBcS+XpC
-# 1IpCiMKxYQQnDEd4Mds0pPeIfZiBrwehmR/iSAUy5cgci3FedSigpFrr5Qz1NLFu
-# RwpVPM5r7kgASUR2oLO7spHCV3n8D0NzjQnF0URu4p6Rf508sJBGNnYv5690Rbql
-# FYvAtlOrrltdwkPwd+8jRzK7SLqsQ1p4yB1ikcDV0MF874YRN7Qk4psYdnrILpTS
-# /g5gdLIF4FJcovIH9EhOue9L/PWoL5TNQJfxz+gWCYBZIPPhCo7iYAo2EDqTrXhy
-# J22hggJDMIICPwYJKoZIhvcNAQkGMYICMDCCAiwCAQEwgakwgZUxCzAJBgNVBAYT
+# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFBFwIrLF
+# 87/S0V9dmhs1EBcHFm1WMA0GCSqGSIb3DQEBAQUABIIBADMY40xbtdwpQnksZZC0
+# oncGGdF+tznifpMmKbJAnft12JlLp8tkHP6GbVrC680tSUuy4GEpEeyM4VXx+5uo
+# 777t4niW9NaRL65GyE5KvdYSfHP9PjIBtPuNF4c/ye1YAXa1HRKtjQL5OSwhrTAu
+# kchIobTYP+vuHh47XBijKqpbKTXb7Ukz8j7+Ik56VldooWhbWXcJdU2MPcasBG3j
+# ddBLgxF93bZEExqzBdmUJvaVzK7Sii8s4TpS88TKDsZpt8Pm3WrIueC3uQLuBiI1
+# 9NjrNLvCiGHZGE8O7ct2tUXWAlrwU0mP0izu2bdiwmzZrzeFs4YDgq0RINeOEL4A
+# SMuhggJDMIICPwYJKoZIhvcNAQkGMYICMDCCAiwCAQEwgakwgZUxCzAJBgNVBAYT
 # AlVTMQswCQYDVQQIEwJVVDEXMBUGA1UEBxMOU2FsdCBMYWtlIENpdHkxHjAcBgNV
 # BAoTFVRoZSBVU0VSVFJVU1QgTmV0d29yazEhMB8GA1UECxMYaHR0cDovL3d3dy51
 # c2VydHJ1c3QuY29tMR0wGwYDVQQDExRVVE4tVVNFUkZpcnN0LU9iamVjdAIPFojw
 # OSVeY45pFDkH5jMLMAkGBSsOAwIaBQCgXTAYBgkqhkiG9w0BCQMxCwYJKoZIhvcN
-# AQcBMBwGCSqGSIb3DQEJBTEPFw0xNzA3MDkxNjM5NDJaMCMGCSqGSIb3DQEJBDEW
-# BBTx7qGOKXw2Hs2Xjb5dmKJ/ZPkeMTANBgkqhkiG9w0BAQEFAASCAQB9yZAtJU95
-# Ddmre0L6Ql0MuYsVKjfHCiS7YASB12a/kGpgz7YV5rXNMlvTU/9b74JxpgrSCo2t
-# uHgtN7V6SXjK2hvsgXI1bx7dzoAfDXLO7gcIz4FwgPpafQPBSZA4Xh8A+Dj+R3q1
-# uxDvCLtsQGpv+guEsUz9uCBvjfVC7gS6ZSby16bpOPP0RB7tdIbUAVV1vOEhEaSc
-# nBjcfmQH2o9ekoK0CmaGO5eZTBfAftWKbn597HXaoeK5XJ9zzOA83LX2bot1Ao7u
-# inNCOJpxpl8HwUs3Jm91p2v65Qqr/2ZE7maKDDk3osf3WT+sWrdFVeZw+10Oi8xx
-# f6azz397pPq+
+# AQcBMBwGCSqGSIb3DQEJBTEPFw0xNzEwMjUxNTA2NThaMCMGCSqGSIb3DQEJBDEW
+# BBTuBUEndbwwGCBRF2XPqk+wP6msnzANBgkqhkiG9w0BAQEFAASCAQCPR/cnz9kS
+# iQbWea0n9bo0T7670cxL7vpA8ZciB+DqZRRXICyfcD4JUzPFWHMfuZMoLcJSo+Pi
+# fBBEz5ilOLGix+D9rE37FTdAF3Izi532Lnz10iZrd5QMAuJ0Z6Qf93E5r11tQwhB
+# zme1AfMIPtmlzcaPFdNli6IvgTIJoK2zr03rNe7g4c/zw5uikEFmILSHkYsXClK4
+# /bKY4Vch9fitHtv72t22fYXZ4BVpWvDlO+aJXvJNEwSJYns+tKT69nEzZXvhUSxq
+# jCR3TWO8FcgFPFJd94Tdhrb2edEJUZVqHn+BYqKlt0nR0s+PCVSFiG191TpACJin
+# eNEoU3aUxIuc
 # SIG # End signature block
