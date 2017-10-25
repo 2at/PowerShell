@@ -14,11 +14,13 @@ Function Import-WebModule {
 		Add-Content $tempfile -Stream Zone.Identifier [ZoneTransfer]`r`nZoneId=3
 		Import-Module $tempfile -Force -Verbose:$false
 	} catch [System.Net.WebException] {
-		if ($_.Exception.Response.StatusCode -eq [System.Net.HttpStatusCode]::NotModified) {
-			Import-Module $tempfile -Verbose:$false
-		} else {
-			throw
-		}
+        if (!$h) { throw }
+		
+        if ($_.Exception.Response -and $_.Exception.Response.StatusCode -eq [System.Net.HttpStatusCode]::NotModified) {
+            Write-Verbose "WebModule $Uri was not modified on server, using valid cache"
+		} else { Write-Warning "WebModule $Uri could not be downloaded, using last downloaded file $($h.'If-Modified-Since')" }
+        
+        Import-Module $tempfile -Verbose:$false
 	}
 }
 
@@ -162,8 +164,8 @@ Export-ModuleMember -Function Set-*
 # SIG # Begin signature block
 # MIIapQYJKoZIhvcNAQcCoIIaljCCGpICAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUwd915W4603LIzfA9N0lyQlGA
-# V6GgghWUMIIEmTCCA4GgAwIBAgIPFojwOSVeY45pFDkH5jMLMA0GCSqGSIb3DQEB
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUQ3xJx6CHeNHYPMV+5BTjepD6
+# Xt2gghWUMIIEmTCCA4GgAwIBAgIPFojwOSVeY45pFDkH5jMLMA0GCSqGSIb3DQEB
 # BQUAMIGVMQswCQYDVQQGEwJVUzELMAkGA1UECBMCVVQxFzAVBgNVBAcTDlNhbHQg
 # TGFrZSBDaXR5MR4wHAYDVQQKExVUaGUgVVNFUlRSVVNUIE5ldHdvcmsxITAfBgNV
 # BAsTGGh0dHA6Ly93d3cudXNlcnRydXN0LmNvbTEdMBsGA1UEAxMUVVROLVVTRVJG
@@ -283,24 +285,24 @@ Export-ModuleMember -Function Set-*
 # EUNPTU9ETyBDQSBMaW1pdGVkMSMwIQYDVQQDExpDT01PRE8gUlNBIENvZGUgU2ln
 # bmluZyBDQQIRAIDR3v1Nwwc8nJBRgICA3CQwCQYFKw4DAhoFAKB4MBgGCisGAQQB
 # gjcCAQwxCjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYK
-# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFNe9aGvD
-# NQNPJiXTDHrLPyeSStbBMA0GCSqGSIb3DQEBAQUABIIBAH2MW069BIvAdNiAO9js
-# b7YeSFtyAvf1OLC5ILGy4ScsKI3kDmOxKfnnWK1URQunk6dw8Pc/bF7VhZ6Ty1FU
-# h1tN19jNV2+rLBiKRC1Z0vPdhcp1JN12yMPyKmzIGOxYqOezOIjBwK8wxxXj/HXK
-# f7M9pDa2dwZlQbctRw7Me5QJsSmm571sHPLgE7Sjacxq3IErHvpRMHdElK0Fg6d7
-# VxVrWajqW8r4r2lRoIaef0Y+J9DR0TDwvfqeoV9LQEtCSBT1mVHu+6m+DdEeANDT
-# yAAfB4xFwFnavwHDCCJ0ELyfmGfF2xLVlG9eD0EaKioNlj9Ihjdmn+fuInMfCZJ+
-# nwehggJDMIICPwYJKoZIhvcNAQkGMYICMDCCAiwCAQEwgakwgZUxCzAJBgNVBAYT
+# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFJanCHCn
+# OtpQA/3HDcy5HwphaLuEMA0GCSqGSIb3DQEBAQUABIIBACnb1Pih+H+nS/WoQSK8
+# jYx77PLAzTNHM82ooTVhM9hcqATZMfzwOWNZFwECfdUn865WbWXcbldBjkEipDeW
+# SRqMLbeYC62C1ItzU/b5sPKehFx4zqiMGcvJDmBaotPb5UoeNYpOzlZMYM2WVHHA
+# CeVlJtFp+SpqNYewVdh0Lv1G7oTJkpdavC2okHzc7de/XEG4lrJuG5537jgzW2Uy
+# 5A19/ttqKuXGqIBR9ONeWuH7khQXwTMvcO+r+b8qLxmFXVPClctZTFWcku6gZk1D
+# laM7rynAHTLXPoGgTK+rSmwiXQA6letgVxtyj3/ob8DT4mZ5yPPWRqv4FN47BFAP
+# 9RuhggJDMIICPwYJKoZIhvcNAQkGMYICMDCCAiwCAQEwgakwgZUxCzAJBgNVBAYT
 # AlVTMQswCQYDVQQIEwJVVDEXMBUGA1UEBxMOU2FsdCBMYWtlIENpdHkxHjAcBgNV
 # BAoTFVRoZSBVU0VSVFJVU1QgTmV0d29yazEhMB8GA1UECxMYaHR0cDovL3d3dy51
 # c2VydHJ1c3QuY29tMR0wGwYDVQQDExRVVE4tVVNFUkZpcnN0LU9iamVjdAIPFojw
 # OSVeY45pFDkH5jMLMAkGBSsOAwIaBQCgXTAYBgkqhkiG9w0BCQMxCwYJKoZIhvcN
-# AQcBMBwGCSqGSIb3DQEJBTEPFw0xNzA1MjQwNjQ3MjZaMCMGCSqGSIb3DQEJBDEW
-# BBRQa4IJn6K5KHBwQLNezubyBLPQwzANBgkqhkiG9w0BAQEFAASCAQCOMR1umpIA
-# j0PeV/XZNZLSHQkWVC+8pqBrm4+HJ4YdYNpm6YZXpxI2ZnD2i2rm0fkN+at7Np8L
-# qPUIepDtw9AlFC8piFFk66XPzcKft1N60VW8w8VBg5d+Ei5GtVK+tSlcM4sJsADI
-# +ADlbK5VUobqLfXQMWAO8wfDt5OAFLEd7iVNXolK4ZYp/H1w9g85qmOWlqoYcgyY
-# SEmXr3QErF6WTwgx3C+UEv/UHWjhqF10xr0OC+rsGwUQQwMHPl/gAcGVOx0PEzel
-# CLu6itXEiT5d4xIZIMkUtxJZUknR+H7FCJsmEW3dY2WaiyLouHsZA33h6xTF/vqd
-# ooWQj80T7Cuf
+# AQcBMBwGCSqGSIb3DQEJBTEPFw0xNzEwMjUxMDI2MTFaMCMGCSqGSIb3DQEJBDEW
+# BBSl7fr1Wh4UVsF6BeseZ9b+P2ytcjANBgkqhkiG9w0BAQEFAASCAQAQOYl0ODjV
+# 2WOFl7OsfzpaltwBIFAA4W/c5eOqpZFI+sy/Kqs7ZDnZSGsCggYgnBXYrbt9BWwL
+# vZuRVG4cGhwAf0NeqYTGswAyN5SsIaGxMNXbSH8BP78KJFxXvZd+tk0vn/1BD5/W
+# A+c2ZXj4nCTDINKI/e4L70RCQ4xi8MSPpVU5hXHpDFI/Ew5JTB4CsBDto+zI5pXK
+# pAVgtD+nvwX2TGCwiu7DNaMpR9fBW+hgGZdKRUUqlxZ9yvwot5pR6h/vIzT9aKI7
+# FWI9R/jK//Z2PKkkFKi41JwljLhy6n0FZIEeguUeniuUxYxvQIPFPW/Ih2nUAZwz
+# +4TuaNLqEyWm
 # SIG # End signature block
