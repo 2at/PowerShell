@@ -64,6 +64,8 @@ Function Get-WebResponse {
 		[ValidateScript({(New-Object System.Uri $_)})]
 		[string]$Url,
 
+		[hashtable]$HostIPs,
+
 		[System.Net.CookieContainer]$CookieContainer,
 		
 		[string]$Method = 'GET',
@@ -84,6 +86,7 @@ Function Get-WebResponse {
 		DateTime=Get-Date
 		Url=$Url
 		Method=$Method
+		HostHeader=$null
 		FormData=$null
 		WebRequestStatus=[System.Net.WebExceptionStatus]::Success
 		WebRequestStatusDescription=$null
@@ -95,7 +98,13 @@ Function Get-WebResponse {
 	}
 	Get-CallerPreference -Cmdlet $PSCmdlet -SessionState $ExecutionContext.SessionState
 
-	$req = [System.Net.WebRequest]::Create($Url)
+	if ($HostIPs.Keys | ?{ $url -match "(https?://)($_)(/.*)" }) { 
+		$req = [System.Net.WebRequest]::Create("$($Matches[1])$($HostIPs[$Matches[2]])$($Matches[3])")
+		$o.HostHeader = $req.Host = $Matches[2]
+	} else {
+		$req = [System.Net.WebRequest]::Create($Url)
+	}
+
 	$req.AllowAutoRedirect = $false
 	$req.UserAgent = $UserAgent
 	$req.CookieContainer = $CookieContainer
@@ -107,7 +116,7 @@ Function Get-WebResponse {
 	if ($FormData) {
 		if ($FormData -is [HashTable]) { $FormData = HashTableToDictionary $FormData }
 		
-		$o.FormData=$FormData
+		$o.FormData = $FormData
 		$c = New-Object System.Net.Http.FormUrlEncodedContent $FormData
 		$req.ContentType = $c.Headers.ContentType.MediaType
 	}
@@ -165,8 +174,8 @@ Export-ModuleMember -Function Set-*
 # SIG # Begin signature block
 # MIIapQYJKoZIhvcNAQcCoIIaljCCGpICAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUnv9lBuLwhlD0vu4Eo8jB+j75
-# kIOgghWUMIIEmTCCA4GgAwIBAgIPFojwOSVeY45pFDkH5jMLMA0GCSqGSIb3DQEB
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUgkHe/UclKvGO7zwVqdBV5DzR
+# lA2gghWUMIIEmTCCA4GgAwIBAgIPFojwOSVeY45pFDkH5jMLMA0GCSqGSIb3DQEB
 # BQUAMIGVMQswCQYDVQQGEwJVUzELMAkGA1UECBMCVVQxFzAVBgNVBAcTDlNhbHQg
 # TGFrZSBDaXR5MR4wHAYDVQQKExVUaGUgVVNFUlRSVVNUIE5ldHdvcmsxITAfBgNV
 # BAsTGGh0dHA6Ly93d3cudXNlcnRydXN0LmNvbTEdMBsGA1UEAxMUVVROLVVTRVJG
@@ -286,24 +295,24 @@ Export-ModuleMember -Function Set-*
 # EUNPTU9ETyBDQSBMaW1pdGVkMSMwIQYDVQQDExpDT01PRE8gUlNBIENvZGUgU2ln
 # bmluZyBDQQIRAIDR3v1Nwwc8nJBRgICA3CQwCQYFKw4DAhoFAKB4MBgGCisGAQQB
 # gjcCAQwxCjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYK
-# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFIFrCmfa
-# K6gUJnheqpehQMhKegavMA0GCSqGSIb3DQEBAQUABIIBAKsSy343ymrRHtariX6M
-# vp84lSBPV1FrfSWvKkl/yBzl3K2Do7am3s70LlpMsfx8TzGl6QFOwIW/mz8OoGaV
-# g8Ftu65KHt0Lgjw7XARp2Czg+UGom4LBMWoD8hxy8YbiLASKcAZ31TUiJWEiG8nA
-# Fm5nCko0B+gSnl7IjMyIOKfVqL8isWwz8jef5sBdhVf+0CJh/E4ycIs/Ahi+gGUj
-# VZzum2HD3vuHxfCAz9nWMr+oYe3zret3L8ccT6XObn9xm2J3OdwcwTPOuI/FcVvD
-# poFWtRYROgHmmalNN7Sm/7quFBN7FmMlEXhTmbpYDgcHApoaN/IWA1uhKXz4J7+B
-# 4jWhggJDMIICPwYJKoZIhvcNAQkGMYICMDCCAiwCAQEwgakwgZUxCzAJBgNVBAYT
+# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFLzpUElv
+# 12pcMrEWB4lsuJ3mvTGcMA0GCSqGSIb3DQEBAQUABIIBAJi09w1VO3MGfSNtrNrK
+# 3d0eBbYjCRlG9iCNGelYJH7/8m37bitJaIAh68AHNT8PRyvi2Ow98W7i5J3R27KL
+# wuh5BgTpA+UO7h9uRCWKCOgW0wFdFCJPoEGTzbk20adPWFwLB1tjJGGmwuoeoVGp
+# Or50TCuH+HUiUyAMER/Jd8FAXG/5D028+NxfmyXS/ktNtZHZtg6r37DUU/3BJihK
+# 9msZr2Ce+NKaTuN9AaKuo1wcX//DPdMZ1Ert9Qi3lhkTPglFsBOLH6sbEzJAAfP8
+# Tsr3qppM0W1lRRTkoer+20DKz9IinwY/PgRXiwp85XCCgdmkGesUssQCgI7dFFKf
+# uyOhggJDMIICPwYJKoZIhvcNAQkGMYICMDCCAiwCAQEwgakwgZUxCzAJBgNVBAYT
 # AlVTMQswCQYDVQQIEwJVVDEXMBUGA1UEBxMOU2FsdCBMYWtlIENpdHkxHjAcBgNV
 # BAoTFVRoZSBVU0VSVFJVU1QgTmV0d29yazEhMB8GA1UECxMYaHR0cDovL3d3dy51
 # c2VydHJ1c3QuY29tMR0wGwYDVQQDExRVVE4tVVNFUkZpcnN0LU9iamVjdAIPFojw
 # OSVeY45pFDkH5jMLMAkGBSsOAwIaBQCgXTAYBgkqhkiG9w0BCQMxCwYJKoZIhvcN
-# AQcBMBwGCSqGSIb3DQEJBTEPFw0xNzEwMjUxMDI2MTRaMCMGCSqGSIb3DQEJBDEW
-# BBTGGPWlVPtHAeWNFfe8nzGzsJ8WPzANBgkqhkiG9w0BAQEFAASCAQBarCUmv5JE
-# bP4vm0fkyTAZpgIurOp998XYQt+Y5Ffmaro3zCfkT5nL/97vvXCN1LapeH4CvWQQ
-# J4KX2WvtYVTBRXCTMGf5a/swvUMGtbVoVa4OBFBLE5wpMnTRTnBRXxG3fTRb0E26
-# q4m4d/94G7bERZNFXA7Lbia7VJBjKRsMfDgOO6nwKPz46mn25f3WOKmGq160C0kf
-# pXN/mdqot2EKFpTdzGHMLol8brDtrnvD2a88sA7QjvuTNTS6x5Im03Y1gHUHZkUH
-# JHif6sOfYysjpUeSxLWLvyn+xIa01xrqf7KJCYdJrel5N/hxO2wRhRl2VMRJqBYT
-# CSxSWS5bJ/3o
+# AQcBMBwGCSqGSIb3DQEJBTEPFw0xNzExMDExNDQ4NTJaMCMGCSqGSIb3DQEJBDEW
+# BBQxx6ARAT78ZXUnMOtavJ/8I5GVrDANBgkqhkiG9w0BAQEFAASCAQARXFqPbumO
+# /1oc2EzxcmcgbhWPkokcP9mpOiyTlO7KR7qyZJtxe1r9YlBdrhKhR4Hw3nThoFE8
+# 2myyyN+M+OHI8n3e6LUGO9MLkLEEZQ0iQgWrqJljOzGVhU+8hTmRC/wyByBcAmgO
+# +ioqDP/BFKEQPIcKg65s0benUurWkvXo6okTNkGIHUwjal3x7/MGNyA1cZsqt6/s
+# ZdPuZpDmdBK2SWgbRbGHYj8AKVwqhpxTorPZKUcziTA8mnV4nC2nrB6t9ebV/d0A
+# 5YB8Fq8uJJqWEconn9kfbXOfu5iIDlu1+KnK45pr9N2mXRidYoQiSdqxe1/uxAcC
+# 3zE2euWRSkRv
 # SIG # End signature block
