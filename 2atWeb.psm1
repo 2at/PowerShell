@@ -64,7 +64,7 @@ Function Get-WebResponse {
 		[ValidateScript({(New-Object System.Uri $_)})]
 		[string]$Url,
 
-		[hashtable]$HostIPs,
+		[hashtable]$HostIPs = @{},
 
 		[System.Net.CookieContainer]$CookieContainer,
 		
@@ -82,6 +82,12 @@ Function Get-WebResponse {
 	
 	if ($FormData -And -Not ($FormData -is [HashTable] -or $FormData -is [System.Collections.Generic.Dictionary[string,string]])) { throw 'FormData must be either a HashTable or a Dictionary[string,string]' }
 
+	if ($HostIPs.Keys | ?{ $url -match "(https?://)($_)(/.*)" }) { 
+		$req = [System.Net.WebRequest]::Create("$($Matches[1])$($HostIPs[$Matches[2]])$($Matches[3])")
+		$o.HostHeader = $req.Host = $Matches[2]
+	}
+
+
 	$o = [ordered]@{
 		DateTime=Get-Date
 		Url=$Url
@@ -98,13 +104,7 @@ Function Get-WebResponse {
 	}
 	Get-CallerPreference -Cmdlet $PSCmdlet -SessionState $ExecutionContext.SessionState
 
-	if ($HostIPs.Keys | ?{ $url -match "(https?://)($_)(/.*)" }) { 
-		$req = [System.Net.WebRequest]::Create("$($Matches[1])$($HostIPs[$Matches[2]])$($Matches[3])")
-		$o.HostHeader = $req.Host = $Matches[2]
-	} else {
-		$req = [System.Net.WebRequest]::Create($Url)
-	}
-
+	$req = [System.Net.WebRequest]::Create($Url)
 	$req.AllowAutoRedirect = $false
 	$req.UserAgent = $UserAgent
 	$req.CookieContainer = $CookieContainer
@@ -174,8 +174,8 @@ Export-ModuleMember -Function Set-*
 # SIG # Begin signature block
 # MIIapQYJKoZIhvcNAQcCoIIaljCCGpICAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUgkHe/UclKvGO7zwVqdBV5DzR
-# lA2gghWUMIIEmTCCA4GgAwIBAgIPFojwOSVeY45pFDkH5jMLMA0GCSqGSIb3DQEB
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUIvws1InnodHzDNvie9AdG2Ef
+# MvigghWUMIIEmTCCA4GgAwIBAgIPFojwOSVeY45pFDkH5jMLMA0GCSqGSIb3DQEB
 # BQUAMIGVMQswCQYDVQQGEwJVUzELMAkGA1UECBMCVVQxFzAVBgNVBAcTDlNhbHQg
 # TGFrZSBDaXR5MR4wHAYDVQQKExVUaGUgVVNFUlRSVVNUIE5ldHdvcmsxITAfBgNV
 # BAsTGGh0dHA6Ly93d3cudXNlcnRydXN0LmNvbTEdMBsGA1UEAxMUVVROLVVTRVJG
@@ -295,24 +295,24 @@ Export-ModuleMember -Function Set-*
 # EUNPTU9ETyBDQSBMaW1pdGVkMSMwIQYDVQQDExpDT01PRE8gUlNBIENvZGUgU2ln
 # bmluZyBDQQIRAIDR3v1Nwwc8nJBRgICA3CQwCQYFKw4DAhoFAKB4MBgGCisGAQQB
 # gjcCAQwxCjAIoAKAAKECgAAwGQYJKoZIhvcNAQkDMQwGCisGAQQBgjcCAQQwHAYK
-# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFLzpUElv
-# 12pcMrEWB4lsuJ3mvTGcMA0GCSqGSIb3DQEBAQUABIIBAJi09w1VO3MGfSNtrNrK
-# 3d0eBbYjCRlG9iCNGelYJH7/8m37bitJaIAh68AHNT8PRyvi2Ow98W7i5J3R27KL
-# wuh5BgTpA+UO7h9uRCWKCOgW0wFdFCJPoEGTzbk20adPWFwLB1tjJGGmwuoeoVGp
-# Or50TCuH+HUiUyAMER/Jd8FAXG/5D028+NxfmyXS/ktNtZHZtg6r37DUU/3BJihK
-# 9msZr2Ce+NKaTuN9AaKuo1wcX//DPdMZ1Ert9Qi3lhkTPglFsBOLH6sbEzJAAfP8
-# Tsr3qppM0W1lRRTkoer+20DKz9IinwY/PgRXiwp85XCCgdmkGesUssQCgI7dFFKf
-# uyOhggJDMIICPwYJKoZIhvcNAQkGMYICMDCCAiwCAQEwgakwgZUxCzAJBgNVBAYT
+# KwYBBAGCNwIBCzEOMAwGCisGAQQBgjcCARUwIwYJKoZIhvcNAQkEMRYEFNsOzKga
+# wAPfRgp/t0zKuFrUMPLCMA0GCSqGSIb3DQEBAQUABIIBAGUQ8AYI100abjPOoO+q
+# DDHa1UA0h6/ia6j4GyMo8H8Nar4pvZLhVwWAWQpMIsSZGvJNbKas7tgQHKQvJ+ln
+# /4I5IZKkZXNx87hr0SxpS+0905tWnVWcRctcSEzXqXbdoY9C0U3MyKtREmkU3aDM
+# qOD6vm+tBCbz8uTUySR52OPw+IYLdnysdWRMTRIEzldJ9U9p2r3T49R1+QpSCDsG
+# iBAs41o3pmVcuayvNUCk8Us4JW8u55GCTUsRpEIHwp5hR700HdX13IyTFegRfnjf
+# VgolypOoFvxDcubjOgt0HWI7VWMCxir5qgrx0/uFDUVc0pZWO/1ICfuuonvn6slF
+# qFehggJDMIICPwYJKoZIhvcNAQkGMYICMDCCAiwCAQEwgakwgZUxCzAJBgNVBAYT
 # AlVTMQswCQYDVQQIEwJVVDEXMBUGA1UEBxMOU2FsdCBMYWtlIENpdHkxHjAcBgNV
 # BAoTFVRoZSBVU0VSVFJVU1QgTmV0d29yazEhMB8GA1UECxMYaHR0cDovL3d3dy51
 # c2VydHJ1c3QuY29tMR0wGwYDVQQDExRVVE4tVVNFUkZpcnN0LU9iamVjdAIPFojw
 # OSVeY45pFDkH5jMLMAkGBSsOAwIaBQCgXTAYBgkqhkiG9w0BCQMxCwYJKoZIhvcN
-# AQcBMBwGCSqGSIb3DQEJBTEPFw0xNzExMDExNDQ4NTJaMCMGCSqGSIb3DQEJBDEW
-# BBQxx6ARAT78ZXUnMOtavJ/8I5GVrDANBgkqhkiG9w0BAQEFAASCAQARXFqPbumO
-# /1oc2EzxcmcgbhWPkokcP9mpOiyTlO7KR7qyZJtxe1r9YlBdrhKhR4Hw3nThoFE8
-# 2myyyN+M+OHI8n3e6LUGO9MLkLEEZQ0iQgWrqJljOzGVhU+8hTmRC/wyByBcAmgO
-# +ioqDP/BFKEQPIcKg65s0benUurWkvXo6okTNkGIHUwjal3x7/MGNyA1cZsqt6/s
-# ZdPuZpDmdBK2SWgbRbGHYj8AKVwqhpxTorPZKUcziTA8mnV4nC2nrB6t9ebV/d0A
-# 5YB8Fq8uJJqWEconn9kfbXOfu5iIDlu1+KnK45pr9N2mXRidYoQiSdqxe1/uxAcC
-# 3zE2euWRSkRv
+# AQcBMBwGCSqGSIb3DQEJBTEPFw0xNzEyMDQxMTIxMjdaMCMGCSqGSIb3DQEJBDEW
+# BBSHEEWbaZCgQX9Hqv7l8fUJp0HhxDANBgkqhkiG9w0BAQEFAASCAQBOz7GyXbzH
+# ngPM6MJEXDKZbBx4wp7GJRgv7Yu5R+vNTFWkZ1s/JfUQqaDkwFZmtNXhkiuTqaOt
+# dwuHO21KZVO5eQBz4eoAJgDIlZKGz5iGCU0iWZo0p/751A+farLIr319905MFCCx
+# z16sdOvZr5iMM1r5jwV8dGZTZj+9WMAQH7FxBV44kwc5EfDWU+RJ8kXJnUNg0QlG
+# d6EHQmd5Xh5fHefKWla0/OlMfvzQ1w1WdFzfqrxLkcfCerjipB4mZr+PE+Rlx1xX
+# B6Vh8bCarRzH49jnHIOTaNPCa8XTRlTtN87AAGaSU5fYgPh0RfN6/zEPCS51uYKE
+# ZMCWiXjwzdFz
 # SIG # End signature block
